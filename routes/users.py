@@ -4,11 +4,12 @@ from datetime import datetime
 from fastapi import FastAPI, HTTPException, status, Response
 from models.user import User
 from schemas.user import UserCreate, UserResponse
-from services.user_store import UserStore
+from services.user_store import UserStore, user_store
+
 
 router = APIRouter()
 
-user_store = UserStore()
+
 
 
 @router.post("/users", response_model=UserResponse)

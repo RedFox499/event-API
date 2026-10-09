@@ -6,12 +6,13 @@ from datetime import datetime
 from fastapi import FastAPI, HTTPException, status, Response
 from models.registration import Registration
 from schemas.registration import RegistrationCreate, RegistrationResponse
-from services.registration_store import RegistrationStore
+from services.registration_store import RegistrationStore, registration_store
 from routes.users import user_store
-from routes.events import events
+from services.event_store import event_store
+
 
 router = APIRouter()
-registration_store = RegistrationStore()
+
 
 
 @router.post("/registrations", response_model=RegistrationResponse)
@@ -22,7 +23,7 @@ def create_registration(registration: RegistrationCreate):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail="User not found")
 
-    event_exists = any(registration.event_id == event.id for event in events)
+    event_exists = any(registration.event_id == event.id for event in event_store.get_events())
 
     if not event_exists:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
@@ -43,7 +44,7 @@ def create_registration(registration: RegistrationCreate):
         if registr.event_id == registration.event_id
     )
 
-    for event in events:
+    for event in event_store.get_events():
         if event.id == registration.event_id:
             if registeredcounter >= event.capacity:
                 raise HTTPException(
@@ -80,7 +81,7 @@ def delete_registration(registration_id: int):
 
 @router.get("/events/{event_id}/registrations", response_model=list[RegistrationResponse])
 def get_registrations_by_event(event_id: int):
-    event_exists = any(event_id == event.id for event in events)
+    event_exists = any(event_id == event.id for event in event_store.get_events())
     if not event_exists:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail="Event not found")
@@ -103,3 +104,4 @@ def get_registrations_by_user(user_id: int):
         if registration.user_id == user_id:
             registered.append(registration)
     return registered
+

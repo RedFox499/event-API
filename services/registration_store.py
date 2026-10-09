@@ -14,5 +14,8 @@ class RegistrationStore:
         self.next_registrations_id += 1
         return registration
 
-    def delete_registration(self, registration_id):
-        return self.registrations.pop(registration_id)
+    def delete_registration(self, index):
+        return self.registrations.pop(index)
+
+
+registration_store = RegistrationStore()

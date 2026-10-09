@@ -16,5 +16,7 @@ class UserStore:
         self.next_user_id += 1
         return user
 
-    def delete_user(self, id):
-        return self.users.pop(id)
+    def delete_user(self, index):
+        return self.users.pop(index)
+
+user_store = UserStore()

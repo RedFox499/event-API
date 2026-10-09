@@ -18,6 +18,7 @@ class EventCreate(BaseModel):
             raise ValueError("End time must be after start time")
         return self
 
+
 class EventUpdate(BaseModel):
     title: str | None = None
     description: str | None = None
@@ -26,4 +27,11 @@ class EventUpdate(BaseModel):
     start: datetime | None = None
     end: datetime | None = None
 
-
+class EventResponse(BaseModel):
+    id: int
+    title: str
+    description: str
+    location: str
+    capacity: int
+    start: datetime
+    end: datetime
