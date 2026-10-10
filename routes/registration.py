@@ -1,7 +1,5 @@
-from fastapi import FastAPI, APIRouter
-from pydantic import BaseModel, Field, model_validator
-from datetime import datetime
-from fastapi import FastAPI, HTTPException, status, Response
+from fastapi import APIRouter, HTTPException, status, Response
+
 from models.registration import Registration
 from schemas.registration import RegistrationCreate, RegistrationResponse
 from services.registration_store import RegistrationStore, registration_store
