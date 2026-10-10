@@ -21,11 +21,11 @@ def update_event(event_id: int, event_updated: EventUpdate):
     for i, event in enumerate(event_store.get_events()):
         if event.id == event_id:
 
-            old_event_data = event.dict()
+            old_event_data = event.model_dump()
             event_updated = event_updated.model_dump(exclude_unset=True)
             old_event_data.update(event_updated)
 
-            if old_event_data['start'] > event_updated['end']:
+            if old_event_data['start'] > old_event_data['end']:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail="end time cannot be before start time"
