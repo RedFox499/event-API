@@ -1,5 +1,3 @@
-from typing import List
-
 from fastapi import FastAPI, APIRouter
 from pydantic import BaseModel, Field, model_validator
 from datetime import datetime
