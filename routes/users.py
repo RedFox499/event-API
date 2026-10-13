@@ -1,23 +1,27 @@
-from fastapi import APIRouter, HTTPException, status, Response
-
+from fastapi import APIRouter, HTTPException, status, Response, Depends
 from models.user import User
 from schemas.user import UserCreate, UserResponse
 from services.user_store import UserStore, user_store
-
+from sqlalchemy.orm import Session
+from sqlalchemy import select
+from database import get_db
+from models.user_model import User
 
 router = APIRouter()
 
-
-
-
 @router.post("/users", response_model=UserResponse)
-def create_user(user: UserCreate):
-    for user_check in user_store.get_users():
-        if user.email == user_check.email:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT,
-                                detail="Email already registered")
-
-    return user_store.add_user(user.name, user.email)
+def create_user(user: UserCreate, db: Session = Depends(get_db)):
+    existing_user = db.scalar(
+        select(User).where(User.email == user.email)
+    )
+    if existing_user:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="Email already registered")
+    new_user = User(name=user.name, email=user.email)
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    return new_user
 
 @router.get("/users", response_model=list[UserResponse])
 def get_users():
