@@ -1,10 +1,19 @@
-from fastapi import APIRouter, HTTPException, status, Response
+from fastapi import APIRouter, HTTPException, status, Response, Depends
 
 from models.registration import Registration
-from schemas.registration import RegistrationCreate, RegistrationResponse
-from services.registration_store import RegistrationStore, registration_store
 from routes.users import user_store
 from services.event_store import event_store
+
+from models.event_model import Event
+from models.user_model import User
+
+from schemas.registration import RegistrationCreate, RegistrationResponse
+from services.registration_store import RegistrationStore, registration_store
+
+from sqlalchemy.orm import Session
+from sqlalchemy import select, func
+from database import get_db
+
 
 
 router = APIRouter()
@@ -12,92 +21,104 @@ router = APIRouter()
 
 
 @router.post("/registrations", response_model=RegistrationResponse)
-def create_registration(registration: RegistrationCreate):
-    user_exists = any(registration.user_id == user.id for user in user_store.get_users())
+def create_registration(registration: RegistrationCreate, db: Session = Depends(get_db)):
+    existing_user = db.scalar(
+        select(User).where(User.id == registration.user_id)
+    )
 
-    if not user_exists:
+    if not existing_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail="User not found")
 
-    event_exists = any(registration.event_id == event.id for event in event_store.get_events())
+    event_existing = db.scalar(
+        select(Event).where(Event.id == registration.event_id)
+    )
 
-    if not event_exists:
+    if not event_existing:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail="Event not found" )
 
-    if any(registration_check.event_id == registration.event_id and
-           registration_check.user_id == registration.user_id
-           for registration_check in registration_store.get_registrations()
-           ):
+    existing_registration = db.scalar(
+        select(Registration).where(
+            Registration.user_id == registration.user_id,
+                        Registration.event_id == registration.event_id
+        )
+    )
+
+    if existing_registration:
 
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Registration already registered"
             )
 
-    registeredcounter = sum(
-        1 for registr in registration_store.get_registrations()
-        if registr.event_id == registration.event_id
+    registration_counter = db.scalar(
+        select(func.count()).select_from(Registration).where(
+            Registration.event_id == registration.event_id
+        )
     )
+    if registration_counter >= event_existing.capacity:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Event is full"
+        )
 
-    for event in event_store.get_events():
-        if event.id == registration.event_id:
-            if registeredcounter >= event.capacity:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Event is full"
-                )
-            break
+    new_registration = Registration(event_id=registration.event_id, user_id=registration.user_id)
+    db.add(new_registration)
+    db.commit()
+    db.refresh(new_registration)
+    return new_registration
 
-    return registration_store.add_registration(user_id=registration.user_id,
-                                               event_id=registration.event_id)
 
 @router.get("/registrations", response_model=list[RegistrationResponse])
-def get_registrations():
-    return registration_store.get_registrations()
+def get_registrations(db: Session = Depends(get_db)):
+    registrations_list = db.scalars(select(Registration)).all()
+    return registrations_list
 
 @router.get("/registrations/{registration_id}", response_model=RegistrationResponse)
-def get_registration(registration_id: int):
-    for registration in registration_store.get_registrations():
-        if registration.id == registration_id:
-            return registration
+def get_registration(registration_id: int, db: Session = Depends(get_db)):
+    registration_exist = db.scalar(
+        select(Registration).where(Registration.id == registration_id)
+    )
+    if registration_exist:
+        return registration_exist
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Registration not found")
 
 @router.delete("/registrations/{registration_id}", response_model=RegistrationResponse)
-def delete_registration(registration_id: int):
-    for i, registration in enumerate(registration_store.get_registrations()):
-
-        if registration.id == registration_id:
-            return registration_store.delete_registration(i)
-
+def delete_registration(registration_id: int, db: Session = Depends(get_db)):
+    registration_exist = db.scalar(
+        select(Registration).where(Registration.id == registration_id)
+    )
+    if registration_exist:
+        db.delete(registration_exist)
+        db.commit()
+        return registration_exist
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
         detail="Registration not found"
         )
 
 @router.get("/events/{event_id}/registrations", response_model=list[RegistrationResponse])
-def get_registrations_by_event(event_id: int):
-    event_exists = any(event_id == event.id for event in event_store.get_events())
-    if not event_exists:
+def get_registrations_by_event(event_id: int, db: Session = Depends(get_db)):
+    event_existing = db.scalar(
+        select(Event).where(Event.id == event_id)
+    )
+    if not event_existing:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail="Event not found")
 
-    registered = []
-    for registration in registration_store.get_registrations():
-        if registration.event_id == event_id:
-            registered.append(registration)
+    registered = db.scalars(select(Registration).where(Registration.event_id == event_id)).all()
     return registered
 
 @router.get("/users/{user_id}/registrations", response_model=list[RegistrationResponse])
-def get_registrations_by_user(user_id: int):
-    user_exists = any(user_id == user.id for user in user_store.get_users())
-    if not user_exists:
+def get_registrations_by_user(user_id: int,  db: Session = Depends(get_db)):
+    existing_user = db.scalar(
+        select(User).where(User.id == user_id)
+    )
+    if not existing_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                             detail="User not found")
 
-    registered = []
-    for registration in registration_store.get_registrations():
-        if registration.user_id == user_id:
-            registered.append(registration)
+    registered = db.scalars(select(Registration).where(Registration.user_id == user_id)).all()
     return registered
 

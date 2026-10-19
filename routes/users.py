@@ -1,11 +1,14 @@
 from fastapi import APIRouter, HTTPException, status, Response, Depends
-from models.user import User
+
 from schemas.user import UserCreate, UserResponse
 from services.user_store import UserStore, user_store
+
+from models.user import User
+from models.user_model import User
+
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 from database import get_db
-from models.user_model import User
 
 router = APIRouter()
 
@@ -24,37 +27,48 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     return new_user
 
 @router.get("/users", response_model=list[UserResponse])
-def get_users():
-    return user_store.get_users()
+def get_users(db: Session = Depends(get_db)):
+    users = db.scalars(
+        select(User)).all()
+    return users
 
 @router.get("/users/{user_id}", response_model=UserResponse)
-def get_user(user_id: int):
-    for user in user_store.get_users():
-        if user.id == user_id:
-            return user
+def get_user(user_id: int, db: Session = Depends(get_db)):
+    existing_user = db.scalar(
+        select(User).where(User.id == user_id)
+    )
+    if existing_user:
+        return existing_user
     raise HTTPException(status_code=404, detail="User not found")
 
 @router.delete("/users/{user_id}", response_model=UserResponse)
-def delete_user(user_id: int):
-    for i, user in enumerate(user_store.get_users()):
-        if user.id == user_id:
-            return user_store.delete_user(i)
-
+def delete_user(user_id: int, db: Session = Depends(get_db)):
+    existing_user = db.scalar(
+        select(User).where(User.id == user_id)
+    )
+    if existing_user:
+        db.delete(existing_user)
+        db.commit()
+        return existing_user
     raise HTTPException(status_code=404, detail="User not found")
 
 @router.put("/users/{user_id}", response_model=UserResponse)
-def update_user(user_id: int, user: UserCreate):
-
-    for current_user in user_store.get_users():
-        if current_user.id == user_id:
-
-            for user_check in user_store.get_users():
-                if user_check.email == user.email and user_check.id != current_user.id:
-                    raise HTTPException(status_code=status.HTTP_409_CONFLICT,
-                                        detail="Email already registered")
-            current_user.name = user.name
-            current_user.email = user.email
-            return current_user
+def update_user(user_id: int, user: UserCreate, db: Session = Depends(get_db)):
+    existing_user = db.scalar(
+        select(User).where(User.id == user_id)
+    )
+    if existing_user:
+        find_existing_email = db.scalar(
+            select(User).where(User.email == user.email,
+                               User.id != existing_user.id)
+        )
+        if find_existing_email:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                                detail="Email already registered")
+        existing_user.name = user.name
+        existing_user.email = user.email
+        db.commit()
+        return existing_user
     raise HTTPException(status_code=404, detail="User not found")
 
 
